@@ -1,10 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 '''
-(C) 2015 Turnro.com
-
-sound/music xxxx.mp3 ---> PCM --->FTT 
----->Requency Spectrum ----> xxxx.png as Texture for shader
+(C) 2015 Turnro.com ScatOrc工作室
 '''
 
 import sys
@@ -29,15 +26,15 @@ FFT_SAMPLE_B = 0.15
 FFT_SAMPLE_A = 0.30
 def genfft(s1):
     global fft_max
-    n = len(s1) 
-    p = fft(s1) # take the fourier transform 
+    n = len(s1)
+    p = fft(s1) # take the fourier transform
     nUniquePts = ceil((n+1)/2.0)
     p = p[0:nUniquePts]
     p = abs(p)
     p = p / float(n) # scale by the number of points so that
-                 # the magnitude does not depend on the length 
-                 # of the signal or on its sampling frequency  
-    p = p**2  # square it to get the power 
+                 # the magnitude does not depend on the length
+                 # of the signal or on its sampling frequency
+    p = p**2  # square it to get the power
 
     # multiply by two (see technical document for details)
     # odd nfft excludes Nyquist point
@@ -69,12 +66,12 @@ def gen(fn):
     sound_length = len(snd)*1.0/sampFreq
     print "sound length = ",sound_length/60.0
     s1 = snd[:,0]
-    #s1是左信道的全部数据 
+    #s1是左信道的全部数据
     print "s1 size =",len(s1)
-    
+
     img = Image.new("RGBA", (TEXTURE_WIDTH,TEXTURE_WIDTH), color=(0,0,0,256))
     draw = ImageDraw.Draw(img)
-    
+
     FFT_STEP = sampFreq*1.0/FPS
     gfmax = 0.0
     for i in xrange(int(sound_length*FPS)):
@@ -82,7 +79,7 @@ def gen(fn):
         end_index = start_index + FFT_SCOPE
         if  end_index >= len(s1):
             end_index = len(s1)-1
-            
+
         if (start_index > 0.5*FFT_STEP):
             start_index -= 0.5*FFT_STEP
             end_index -= 0.5*FFT_STEP
@@ -113,5 +110,5 @@ if __name__ == "__main__":
         gen(fn)
     else:
         print "mp3 file path as parameter..."
-    
+
     print 'DONE'
