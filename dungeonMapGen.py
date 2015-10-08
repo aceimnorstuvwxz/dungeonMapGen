@@ -175,10 +175,32 @@ def findContinuesAgentPos(minmap, agentType):
 
 AGENT_ID_INDEX = 0
 
-def nexAgentId():
+def nextAgentId():
     ret = AGENT_ID_INDEX
     AGENT_ID_INDEX += 1
     return ret
+
+def genEmptyAgent():
+    agent = {}
+    agent["aid"] = nextAgentId()
+    agent["level"] = 0
+    
+    
+    return agent
+
+def genAgent(minmap, agentpos, agentType, mapposLength):
+    agent = genEmptyAgent()
+    agent["pos"] = agentpos
+    agent["type"] = agentType
+    if agentType == AT_3RD_STONE:
+        pass
+    elif agentType == AT_3RD_TREE:
+        pass
+    elif agentType == AT_3RD_WATER:
+        agent["blood"] = 1
+        agent["attack"]
+        
+
 
 def putAgentIn(minmap, mapposLength, agentType):
     continues = calcAgentContinues(Continues[agentType])
@@ -190,7 +212,7 @@ def putAgentIn(minmap, mapposLength, agentType):
     
     print "putAgentIn agentType=", agentType, "continues=", continues, "agentPos=", agentpos
 
-    minmap["agents"][encodeAgentPos(agentpos)] = {}#genAgent(minmap, agentpos, agentType, mapposLength)
+    minmap["agents"][encodeAgentPos(agentpos)] = genAgent(minmap, agentpos, agentType, mapposLength)
     minmap["agents_index"][agentType].append(agentpos)
 
 def genAgentsOfType(minmap, agentType, mapposLength):
