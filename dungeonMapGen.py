@@ -8,107 +8,246 @@ import sys
 from pylab import*
 from scipy.io import wavfile
 from PIL import Image, ImageDraw
+import json
+import random
 
-TEXTURE_WIDTH = 256 #1024->281min 256->18min max,因为有PNG压缩，所以对图像的大小影响小，但对显存影响还是明显的。
-FPS = 60
-FFT_SCOPE = 1024 #fft 窗大小
-FFT_UNIFORM = 200 #峰值在150左右,200保证安全
+# Agent 类型，与DDAgent.h内同步。
+AT_3RD_MINE = 0
+AT_3RD_STONE = 1
+AT_3RD_TREE = 2
+AT_3RD_WATER = 3
+AT_3RD_VOLCANO = 4
+AT_ENEMY_FAR = 5
+AT_ENEMY_NEAR = 6
+AT_ENEMY_NEST = 7
+AT_FRIEND_ARROW_TOWER = 8
+AT_FRIEND_CONNON_TOWER = 9
+AT_FRIEND_CORE = 10
+AT_FRIEND_CURE_TOWER = 11
+AT_FRIEND_LIGHT_TOWER = 12
+AT_FRIEND_MAGIC_TOWER = 13
+AT_FRIEND_MINER = 14
+AT_FRIEND_WALL = 15
+AT_MAX = 16
 
+BIGMAP_X_EXPAND = 15 #X方向一共31格
+BIGMAP_Y_EXPAND = 5  #Y方向一共11格
 
-'''
-shadertoy
-https://www.shadertoy.com/view/MslGWN
-我们仅需要这4个采样点的power数据，也刚好使得一个帧能够用纹理的一个Pixel表示。
-'''
-FFT_SAMPLE_R = 0.01
-FFT_SAMPLE_G = 0.07
-FFT_SAMPLE_B = 0.15
-FFT_SAMPLE_A = 0.30
-def genfft(s1):
-    global fft_max
-    n = len(s1)
-    p = fft(s1) # take the fourier transform
-    nUniquePts = ceil((n+1)/2.0)
-    p = p[0:nUniquePts]
-    p = abs(p)
-    p = p / float(n) # scale by the number of points so that
-                 # the magnitude does not depend on the length
-                 # of the signal or on its sampling frequency
-    p = p**2  # square it to get the power
+MINMAP_EXPAND = 5 # 11*11
 
-    # multiply by two (see technical document for details)
-    # odd nfft excludes Nyquist point
-    if n % 2 > 0: # we've got odd number of points fft
-        p[1:len(p)] = p[1:len(p)] * 2
+# 各元素在不同属性下出现的概率
+OccurcyRadio = {}
+#                                  金    木   水   火    土
+OccurcyRadio[AT_3RD_STONE]      = [0.5, 0.5, 0.5, 0.5, 0.8] #石头
+OccurcyRadio[AT_3RD_TREE]       = [0.2, 0.9, 0.7, 0.3, 0.6] #树
+OccurcyRadio[AT_3RD_WATER]      = [0.2, 0.5, 0.8, 0.2, 0.5] #水潭
+OccurcyRadio[AT_3RD_VOLCANO]    = [0.6, 0.2, 0.2, 0.8, 0.3] #火山
+OccurcyRadio[AT_3RD_MINE]       = [0.9, 0.5, 0.5, 0.5, 0.6] #矿
+OccurcyRadio[AT_ENEMY_NEST]     = [1.0, 1.0, 1.0, 1.0, 1.0] #母巢
+
+# 各元素在出现时出现的个数
+NumScope = {}
+#                          最小/最大
+NumScope[AT_3RD_STONE]    = [2,15]
+NumScope[AT_3RD_TREE]     = [2,15]
+NumScope[AT_3RD_WATER]    = [1,15]
+NumScope[AT_3RD_VOLCANO]  = [1,2]
+NumScope[AT_3RD_MINE]     = [2,10]
+NumScope[AT_ENEMY_NEST]   = [0,4]
+
+# 各元素的连续性
+Continues = {}
+Continues[AT_3RD_STONE]   = 0.5
+Continues[AT_3RD_TREE]    = 0.7
+Continues[AT_3RD_WATER]   = 0.5
+Continues[AT_3RD_VOLCANO] = 0.0
+Continues[AT_3RD_MINE]    = 0.5
+Continues[AT_ENEMY_NEST]  = 0.0
+
+# 一些配置项
+WATER_ACTION_PERIOD = 10;
+VOLCONO_ACTION_PERIOD = 10;
+
+WATER_CURE_LENGTH_RADIO = 1.0/5;
+VOLCONO_ATTACK_LENGTH_RADIO = 1.0/5;
+VOLCONO_ATTACK_DISTANCE = 5;
+
+MINE_BASE_CAPACITY = 30;
+MINE_CAPACITY_LENGTH_RADIO = 5;
+MineCapacityRadio = [0.5, 2.0];
+
+PeriodScopeNestAction = [10,50];
+NestChanceToRelaxScope = [0.01,0.1];
+NestRelaxPeriodScope = [50,1000];
+
+NestChanceToHasBoss = 0.5;
+NestBossRadioScope = [0.05,0.25];
+
+NestChanceToBeNear = 0.5;
+NestMostNearAsNearScope = [0.8,1];
+NestMostFarAsNearScope = [0, 0.2];
+
+NEST_BLOOD_BASE = 1;
+NEST_ATTACK_BASE = 1;
+NEST_BLOOD_LENGTH_RADIO = 1.0/2;
+NestBloodRadioScope = [1.0, 1.5];
+NEST_ATTACK_LENGTH_RADIO = 1.0/2;
+NestAttackRadioScope = [1.0, 1.5];
+NEST_CHANCE_AS_MAIN_ELEMENT_TYPE = 0.75;
+
+NEST_ATTACK_DISTANCE_BASE = 2;
+NEST_ATTACK_DISTANCE_LENGTH_RADIO = 1.0/5;
+NestAttackDistanceRadioScope = [1.0,1.5];
+
+DEFAULT_ENEMY_ACTION_PERIOD = 10;
+DefaultEnemyActionPeriodScope = [1.0,1.5];
+DEFAULT_FRIEND_ACTION_PERIOD = 10;
+
+def wrapPos(x,y):
+    return {"x":x, "y":y}
+
+def posAdd(pos, dx, dy):
+    return wrapPos(pos.x + dx, pos.y + dy)
+
+def encodeMapPos(mappos):
+    x,y = mappos['x'], mappos['y']
+    return (y+BIGMAP_Y_EXPAND)*100 + (x+BIGMAP_X_EXPAND)
+def encodeAgentPos(agentpos):
+    x,y = agentpos["x"], agentpos["y"]
+    return (y+MINMAP_EXPAND)*100 + (x+MINMAP_EXPAND)
+
+def rand_0_1():
+    return random.random()
+
+def calcAgentContinues(radio):
+    return random.random() < radio;
+
+def calcElementAgentOccurcy(occradio, elementType):
+    radio = occradio[elementType];
+    return random.random() < radio;
+
+def calcRandomScope(minmax):
+    return int(minmax[0] + (minmax[1] - minmax[0]) * random.random());
+
+def isPosEmpty(minmap, agentpos):
+    return  minmap["agents"].has_key(encodeAgentPos(agentpos))
+
+def findRandomEmptyAgentPos(minmap):
+    while (True):
+        print "findRandomEmptyAgentPos"
+        pos = wrapPos(random.randint(-MINMAP_EXPAND, MINMAP_EXPAND), random.randint(-MINMAP_EXPAND, MINMAP_EXPAND))
+        if isPosEmpty(minmap, pos):
+            return pos;
+    
+def findContinuesAgentPos(minmap, agentType):
+    emptyContinuesPoses = []
+    print agentType
+    for agentPos in minmap["agents_index"][agentType]:
+        pos = posAdd(agentPos, -1, 0)
+        if isPosEmpty(minmap, pos):
+            emptyContinuesPoses.append(pos)
+        pos = posAdd(agentPos, 1, 0)
+        if isPosEmpty(minmap, pos):
+            emptyContinuesPoses.append(pos)
+        pos = posAdd(agentPos, 0, -1)
+        if isPosEmpty(minmap, pos):
+            emptyContinuesPoses.append(pos)
+        pos = posAdd(agentPos, 0, 1)
+        if isPosEmpty(minmap, pos):
+            emptyContinuesPoses.append(pos)
+        pos = posAdd(agentPos, 1, 1)
+        if isPosEmpty(minmap, pos):
+            emptyContinuesPoses.append(pos)
+        pos = posAdd(agentPos, -1, 1)
+        if isPosEmpty(minmap, pos):
+            emptyContinuesPoses.append(pos)
+        pos = posAdd(agentPos, 1, -1)
+        if isPosEmpty(minmap, pos):
+            emptyContinuesPoses.append(pos)
+        pos = posAdd(agentPos, -1, -1)
+        if isPosEmpty(minmap, pos):
+            emptyContinuesPoses.append(pos)
+    
+    if len(emptyContinuesPoses) > 0:
+        return emptyContinuesPoses[random.randint(0, len(emptyContinuesPoses)-1)]
     else:
-        p[1:len(p) -1] = p[1:len(p) - 1] * 2 # we've got even number of points fft
+        return findRandomEmptyAgentPos(minmap)
 
-    ret = [abs(10*log10(x)) for x in p]
+AGENT_ID_INDEX = 0
+
+def nexAgentId():
+    ret = AGENT_ID_INDEX
+    AGENT_ID_INDEX += 1
     return ret
-'''
-# for v in p:
-#     print 10*log10(v)
 
-freqArray = arange(0, nUniquePts, 1.0) * (sampFreq / n);
-img = Image.new("RGBA", (TEXTURE_WIDTH,TEXTURE_WIDTH), color=(256,0,0,256))
-draw = ImageDraw.Draw(img)
+def putAgentIn(minmap, mapposLength, agentType):
+    continues = calcAgentContinues(Continues[agentType])
+    agentpos = {}
+    if continues:
+        agentpos = findContinuesAgentPos(minmap, agentType)
+    else:
+        agentpos = findRandomEmptyAgentPos(minmap);
+    
+    print "putAgentIn agentType=", agentType, "continues=", continues, "agentPos=", agentpos
 
+    minmap.agents[encodeAgentPos(agentpos)] = {}#genAgent(minmap, agentpos, agentType, mapposLength)
+    minmap.agents_index[agentType].append(agentpos)
 
-plot(freqArray/1000, 10*log10(p), color='k')
-xlabel('Frequency (kHz)')
-ylabel('Power (dB)')
-'''
+def genAgentsOfType(minmap, agentType, mapposLength):
+    print "genAgentsOfType", agentType, "mapposLength", mapposLength
+    if calcElementAgentOccurcy(OccurcyRadio[agentType], minmap["main_element_type"]):
+        num = calcRandomScope(NumScope[agentType])
+        print "num", num
+        for i in xrange(num):
+            putAgentIn(minmap, mapposLength, agentType)
 
-def gen(fn):
-    sampFreq, snd = wavfile.read(fn)
-    #sampFreq采样率为1分钟的采样次数
-    snd = snd / (2.**15)
-    sound_length = len(snd)*1.0/sampFreq
-    print "sound length = ",sound_length/60.0
-    s1 = snd[:,0]
-    #s1是左信道的全部数据
-    print "s1 size =",len(s1)
+def genMinMap(mappos):
+    print "genMinMap", mappos
+    minmap = {}
+    minmap["pos"] = mappos
+    minmap["state"] = 0 #non-active
+    
+    minmap["main_element_type"] = random.randint(0, 4)
+    minmap["secondary_element_type"] = random.randint(0, 4)
+    
+    # 实际以AgentPos作为索引的，agents字典
+    minmap['agents'] = {}
+    
+    # 各类agent的索引
+    minmap["agents_index"] = []
+    for at in xrange(AT_MAX):
+        minmap["agents_index"].append([])
 
-    img = Image.new("RGBA", (TEXTURE_WIDTH,TEXTURE_WIDTH), color=(0,0,0,256))
-    draw = ImageDraw.Draw(img)
+    mapposLength = abs(mappos["x"]) + abs(mappos["y"])
 
-    FFT_STEP = sampFreq*1.0/FPS
-    gfmax = 0.0
-    for i in xrange(int(sound_length*FPS)):
-        start_index = FFT_STEP*i
-        end_index = start_index + FFT_SCOPE
-        if  end_index >= len(s1):
-            end_index = len(s1)-1
+    genAgentsOfType(minmap, AT_3RD_STONE, mapposLength)
+    genAgentsOfType(minmap, AT_3RD_TREE, mapposLength)
+    genAgentsOfType(minmap, AT_3RD_WATER, mapposLength)
+    genAgentsOfType(minmap, AT_3RD_VOLCANO, mapposLength)
+    genAgentsOfType(minmap, AT_3RD_MINE, mapposLength)
+    genAgentsOfType(minmap, AT_ENEMY_NEST, mapposLength)
 
-        if (start_index > 0.5*FFT_STEP):
-            start_index -= 0.5*FFT_STEP
-            end_index -= 0.5*FFT_STEP
+    return minmap
 
-        fft_data = s1[start_index:end_index]
-        fft_ret = genfft(fft_data)
-#         print len(fft_ret)
-        fft_ret_len = len(fft_ret)
-        rgba = [fft_ret[int(FFT_SAMPLE_R*fft_ret_len)],
-                fft_ret[int(FFT_SAMPLE_G*fft_ret_len)],
-                fft_ret[int(FFT_SAMPLE_B*fft_ret_len)],
-                fft_ret[int(FFT_SAMPLE_A*fft_ret_len)]]
-        for x in rgba:
-            if x > gfmax:
-                gfmax = x
-        rgba = [1.0-x/FFT_UNIFORM for x in rgba]
-        ###make uniform
-        draw.point((i%TEXTURE_WIDTH, i/TEXTURE_WIDTH), fill=(int(256*rgba[0]),
-                                      int(256*rgba[1]),
-                                      int(256*rgba[2]),
-                                      int(256*rgba[3])))
-    img.save(fn+".png", 'PNG')
-    print "max=",gfmax
+def genMapData():
+    mapdata = {}
+    for x in xrange(-BIGMAP_X_EXPAND, BIGMAP_X_EXPAND+1):
+        for y in xrange(-BIGMAP_Y_EXPAND, BIGMAP_Y_EXPAND+1):
+            mapdata[encodeMapPos(x, y)] = genMinMap(wrapPos(x,y))
+            
+    mapdata["agent_id_index"] = AGENT_ID_INDEX #当前消耗到的AgentId 的MAX
+    return mapdata
+
+def drawBigMap(mapdata):
+    pass
+
+def dumpMapData(mapdata):
+    #del minmap["agents_index"] 
+    print json.dumps(mapdata)
+    pass
 
 if __name__ == "__main__":
-    if len(sys.argv) == 2:
-        fn = sys.argv[1]
-        gen(fn)
-    else:
-        print "mp3 file path as parameter..."
-
+    mapdata = genMapData()
+    drawBigMap(mapdata)
+    dumpMapData(mapdata)
     print 'DONE'
