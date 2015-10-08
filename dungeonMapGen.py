@@ -107,7 +107,7 @@ def wrapPos(x,y):
     return {"x":x, "y":y}
 
 def posAdd(pos, dx, dy):
-    return wrapPos(pos.x + dx, pos.y + dy)
+    return wrapPos(pos['x'] + dx, pos['y'] + dy)
 
 def encodeMapPos(mappos):
     x,y = mappos['x'], mappos['y']
@@ -130,12 +130,12 @@ def calcRandomScope(minmax):
     return int(minmax[0] + (minmax[1] - minmax[0]) * random.random());
 
 def isPosEmpty(minmap, agentpos):
-    return  minmap["agents"].has_key(encodeAgentPos(agentpos))
+    return  minmap["agents"].has_key(encodeAgentPos(agentpos)) == False
 
 def findRandomEmptyAgentPos(minmap):
     while (True):
-        print "findRandomEmptyAgentPos"
         pos = wrapPos(random.randint(-MINMAP_EXPAND, MINMAP_EXPAND), random.randint(-MINMAP_EXPAND, MINMAP_EXPAND))
+        print "findRandomEmptyAgentPos", pos
         if isPosEmpty(minmap, pos):
             return pos;
     
@@ -190,8 +190,8 @@ def putAgentIn(minmap, mapposLength, agentType):
     
     print "putAgentIn agentType=", agentType, "continues=", continues, "agentPos=", agentpos
 
-    minmap.agents[encodeAgentPos(agentpos)] = {}#genAgent(minmap, agentpos, agentType, mapposLength)
-    minmap.agents_index[agentType].append(agentpos)
+    minmap["agents"][encodeAgentPos(agentpos)] = {}#genAgent(minmap, agentpos, agentType, mapposLength)
+    minmap["agents_index"][agentType].append(agentpos)
 
 def genAgentsOfType(minmap, agentType, mapposLength):
     print "genAgentsOfType", agentType, "mapposLength", mapposLength
@@ -233,7 +233,7 @@ def genMapData():
     mapdata = {}
     for x in xrange(-BIGMAP_X_EXPAND, BIGMAP_X_EXPAND+1):
         for y in xrange(-BIGMAP_Y_EXPAND, BIGMAP_Y_EXPAND+1):
-            mapdata[encodeMapPos(x, y)] = genMinMap(wrapPos(x,y))
+            mapdata[encodeMapPos(wrapPos(x,y))] = genMinMap(wrapPos(x,y))
             
     mapdata["agent_id_index"] = AGENT_ID_INDEX #当前消耗到的AgentId 的MAX
     return mapdata
