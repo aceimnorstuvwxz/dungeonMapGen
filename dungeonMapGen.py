@@ -10,8 +10,12 @@ from scipy.io import wavfile
 from PIL import Image, ImageDraw
 import json
 import random
+import time
 
 AGENT_ID_INDEX = 0
+RADIO_MINIMAP_LOST = 0.05 #Bigmap内空隙比例。
+CNT_BLOCKED = 0
+CNT_NON_BLOCKED = 0
 
 # Agent 类型，与DDAgent.h内同步。
 AT_3RD_MINE = 0
@@ -300,6 +304,18 @@ def genAgentsOfType(minmap, agentType, mapposLength):
 def genMinMap(mappos):
     print "genMinMap", mappos
     minmap = {}
+    global CNT_BLOCKED
+    global CNT_NON_BLOCKED
+    
+    #部分MinMap是空隙，不能进入。
+    if rand_0_1() < RADIO_MINIMAP_LOST:
+        minmap["blocked"] = 1
+        CNT_BLOCKED += 1
+        return minmap
+    else:
+        CNT_NON_BLOCKED += 1
+        minmap["blocked"] = 0
+    
     minmap["pos"] = mappos
     minmap["state"] = 0 #non-active
     
@@ -339,11 +355,15 @@ def drawBigMap(mapdata):
 
 def dumpMapData(mapdata):
     #del minmap["agents_index"] 
-    print json.dumps(mapdata)
-    pass
+    fn = 'bigmap%d.json'%(time.time())
+    print fn
+    f = open(fn,'w')
+    f.write(json.dumps(mapdata))
+    f.close()
 
 if __name__ == "__main__":
     mapdata = genMapData()
     drawBigMap(mapdata)
     dumpMapData(mapdata)
+    print AGENT_ID_INDEX,CNT_BLOCKED, CNT_NON_BLOCKED, CNT_BLOCKED * 1.0 / (CNT_BLOCKED + CNT_NON_BLOCKED)
     print 'DONE'
