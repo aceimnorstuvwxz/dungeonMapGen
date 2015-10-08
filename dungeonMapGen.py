@@ -11,6 +11,8 @@ from PIL import Image, ImageDraw
 import json
 import random
 
+AGENT_ID_INDEX = 0
+
 # Agent 类型，与DDAgent.h内同步。
 AT_3RD_MINE = 0
 AT_3RD_STONE = 1
@@ -29,6 +31,14 @@ AT_FRIEND_MAGIC_TOWER = 13
 AT_FRIEND_MINER = 14
 AT_FRIEND_WALL = 15
 AT_MAX = 16
+
+# 五行标记
+EL_METAL = 0
+EL_WOOD = 1
+EL_WATER = 2
+EL_FIRE = 3
+EL_EARTH = 4
+EL_NONE = 5
 
 BIGMAP_X_EXPAND = 15 #X方向一共31格
 BIGMAP_Y_EXPAND = 5  #Y方向一共11格
@@ -65,10 +75,12 @@ Continues[AT_3RD_MINE]    = 0.5
 Continues[AT_ENEMY_NEST]  = 0.0
 
 # 一些配置项
+DEFAULT_ACTION_PERIOD = 10;
 WATER_ACTION_PERIOD = 10;
 VOLCONO_ACTION_PERIOD = 10;
 
 WATER_CURE_LENGTH_RADIO = 1.0/5;
+WATER_CURE_LENGTH_RADIO = 1.0/10;
 VOLCONO_ATTACK_LENGTH_RADIO = 1.0/5;
 VOLCONO_ATTACK_DISTANCE = 5;
 
@@ -173,9 +185,9 @@ def findContinuesAgentPos(minmap, agentType):
     else:
         return findRandomEmptyAgentPos(minmap)
 
-AGENT_ID_INDEX = 0
 
 def nextAgentId():
+    global AGENT_ID_INDEX
     ret = AGENT_ID_INDEX
     AGENT_ID_INDEX += 1
     return ret
@@ -184,7 +196,27 @@ def genEmptyAgent():
     agent = {}
     agent["aid"] = nextAgentId()
     agent["level"] = 0
-    
+    agent["blood"] = 1
+    agent["attack"] = 0
+    agent["cure"] = 0
+    agent["action_distance"] = 0
+    agent["action_period"] = DEFAULT_ACTION_PERIOD
+    agent["action_period_index"] = DEFAULT_ACTION_PERIOD
+    agent["scope"] = 0
+    agent["element_type"] = EL_NONE
+    agent["mine_capacity"] = 0
+    agent["mine_amount"] = 0
+    agent["chance_to_relax"] = 0.0
+    agent["action_relax_reriod"] = 1
+    agent["action_relax_index"] = 0
+    agent["nest_chance_to_near"] = 0.0
+    agent["nest_chance_to_boss"] = 0.0
+    agent["nest_blood"] = 0
+    agent["nest_attack"] = 0
+    agent["nest_element_type"] = EL_NONE
+    agent["nest_attack_distance_near"] = 1
+    agent["nest_attack_distance_far"] = 2
+    agent["nest_attack_period"] = DEFAULT_ENEMY_ACTION_PERIOD
     
     return agent
 
@@ -198,9 +230,51 @@ def genAgent(minmap, agentpos, agentType, mapposLength):
         pass
     elif agentType == AT_3RD_WATER:
         agent["blood"] = 1
-        agent["attack"]
+        agent["attack"] = 0
+        agent["cure"] = 1 + int(mapposLength * WATER_CURE_LENGTH_RADIO)
+        agent["action_distance"] = 1
+        agent["action_period"] = WATER_ACTION_PERIOD
+        agent["action_period_index"] = WATER_ACTION_PERIOD
+    elif agentType == AT_3RD_VOLCANO:
+        agent["blood"] = 1
+        agent["attack"] = 1 + int(mapposLength * VOLCONO_ATTACK_LENGTH_RADIO)
+        agent["action_distance"] = VOLCONO_ATTACK_DISTANCE
+        agent["action_period"] = VOLCONO_ACTION_PERIOD
+        agent["action_period_index"] = VOLCONO_ACTION_PERIOD
+    elif agentType == AT_3RD_MINE:
+        agent["mine_capacity"] = (MINE_BASE_CAPACITY + MINE_CAPACITY_LENGTH_RADIO * mapposLength) * calcRandomScope(MineCapacityRadio)
+        agent["mine_amount"] = agent["mine_capacity"]
+    elif agentType == AT_ENEMY_NEST:
+        agent["action_period"] = calcRandomScope(PeriodScopeNestAction)
+        agent["action_index"] = agent["action_period"]
+        agent["chance_to_relax"] = calcRandomScope(NestChanceToRelaxScope)
+        agent["action_relax_period"] = calcRandomScope(NestRelaxPeriodScope)
+        agent["action_relax_index"] = 0
+        if rand_0_1() < NestChanceToBeNear:
+            agent["nest_chance_to_near"] = calcRandomScope(NestMostNearAsNearScope)
+        else:
+            agent["nest_chance_to_near"] = calcRandomScope(NestMostFarAsNearScope)
         
-
+        if rand_0_1() < NestChanceToHasBoss:
+            agent["nest_chance_to_boss"] = calcRandomScope(NestBossRadioScope)
+        else:
+            agent["nest_chance_to_boss"] = 0.0
+            
+        agent["nest_blood"] = (NEST_BLOOD_BASE + mapposLength * NEST_BLOOD_LENGTH_RADIO) * calcRandomScope(NestBloodRadioScope);
+        agent["nest_attack"] = (NEST_ATTACK_BASE + mapposLength * NEST_ATTACK_LENGTH_RADIO) * calcRandomScope(NestAttackRadioScope);
+        
+        if rand_0_1() < rand_0_1() < NEST_CHANCE_AS_MAIN_ELEMENT_TYPE:
+            agent["nest_element_type"] = minmap["main_element_type"]
+        else:
+            agent["nest_element_type"] = minmap["secondary_element_type"]
+        
+        agent["nest_attack_distance_near"] = 1
+        agent["nest_attack_distance_far"] = (NEST_ATTACK_DISTANCE_BASE + NEST_ATTACK_DISTANCE_LENGTH_RADIO * mapposLength) * calcRandomScope(NestAttackDistanceRadioScope)
+        agent["nest_attack_period"] = DEFAULT_ENEMY_ACTION_PERIOD * calcRandomScope(DefaultEnemyActionPeriodScope)
+    else:
+        print "ERROR invalid type=", agentType    
+    
+    return agent
 
 def putAgentIn(minmap, mapposLength, agentType):
     continues = calcAgentContinues(Continues[agentType])
