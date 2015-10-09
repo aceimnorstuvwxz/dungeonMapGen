@@ -67,6 +67,9 @@ ElementBaseColor[EL_WATER] = (44,49,71,255)
 ElementBaseColor[EL_FIRE]  = (71,50,44,255)
 ElementBaseColor[EL_EARTH] = (69,71,44,255)
 
+BlockedBaseColor = (40,47,31,255)
+ImageHeight = 0
+
 # 各元素在不同属性下出现的概率
 OccurcyRadio = {}
 #                                  金    木   水   火    土
@@ -322,6 +325,7 @@ def genMinMap(mappos):
     global CNT_BLOCKED
     global CNT_NON_BLOCKED
 
+    minmap["pos"] = mappos
     #部分MinMap是空隙，不能进入。
     if rand_0_1() < RADIO_MINIMAP_LOST:
         minmap["blocked"] = 1
@@ -331,7 +335,6 @@ def genMinMap(mappos):
         CNT_NON_BLOCKED += 1
         minmap["blocked"] = 0
 
-    minmap["pos"] = mappos
     minmap["state"] = 0 #non-active
 
     minmap["main_element_type"] = random.randint(0, 4)
@@ -372,19 +375,6 @@ def calcMinMapCenter(mappos):
     y = (mappos["y"] + BIGMAP_Y_EXPAND) * minmapLength + MINMAP_EXPAND*(MINMAP_POS_EXPAND*2+1) + MINMAP_POS_OFFSET + MINMAP_POS_EXPAND
     return x,y
 
-def drawBaseColor(mapdata, draw):
-    for encodedMapPos, minmap in mapdata["minmaps"].items():
-        if minmap["blocked"] != 0:
-            continue
-        mappos = minmap["pos"]
-        baseColor = ElementBaseColor[minmap["main_element_type"]]
-        cx,cy = calcMinMapCenter(mappos)
-        print cx,cy
-        offset = (MINMAP_EXPAND*2+1)*(MINMAP_POS_EXPAND*2+1)/2
-        for px in xrange(cx-offset, cx+offset+1):
-            for py in xrange(cy-offset, cy+offset+1):
-                draw.point((px, py), fill=baseColor)
-
 def drawColorMix(colorRadioCouples):
     radioAll = 0.0
     for couple in colorRadioCouples:
@@ -400,26 +390,83 @@ def drawColorMix(colorRadioCouples):
         g += radio/radioAll * color[1]
         b += radio/radioAll * color[2]
         a += radio/radioAll * color[3]
+
+    return (int(r),int(g),int(b),int(a))
+
+def fetchBaseColorByMapPos(mapdata, mappos):
+    if mapdata["minmaps"].has_key(encodeMapPos(mappos)):
+        minmap = mapdata["minmaps"][encodeMapPos(mappos)]
+        if minmap["blocked"] != 0:
+            return BlockedBaseColor
+        else:
+            seco = ElementBaseColor[minmap["main_element_type"]]
+            return drawColorMix([(seco, 1), (BlockedBaseColor, 5)])
+    else:
+        return BlockedBaseColor
     
-    return (r,g,b,a)
+def drawHelp(draw, position, color):
+    '''解决图片的y坐标与地图的y坐标相反的问题'''
+    draw.point((position[0], ImageHeight-position[1]), color)
+
+def drawBaseColor(mapdata, draw):
+    for encodedMapPos, minmap in mapdata["minmaps"].items():
+        mappos = minmap["pos"]
+        baseColor = fetchBaseColorByMapPos(mapdata, mappos)
+        cx,cy = calcMinMapCenter(mappos)
+        print cx,cy
+        offset = (MINMAP_EXPAND*2+1)*(MINMAP_POS_EXPAND*2+1)/2
+        for px in xrange(cx-offset, cx+offset+1):
+            for py in xrange(cy-offset, cy+offset+1):
+                drawHelp(draw, (px, py), baseColor)
+
+
 
 def drawLeakBetweenMinmaps(mapdata, draw):
     '''填充minmap之间的offset间隙，过度色'''
-    
+    for encodedMapPos, minmap in mapdata["minmaps"].items():
+        mappos = minmap["pos"]
+        ownColor = fetchBaseColorByMapPos(mapdata, mappos)
+        topMapPos = wrapPos(mappos["x"], mappos["y"]+1)
+        bottomMapPos = wrapPos(mappos["x"], mappos["y"]-1)
+        leftMapPos = wrapPos(mappos["x"]-1, mappos["y"])
+        rightMapPos = wrapPos(mappos["x"]+1, mappos["y"])
+        
+        topColor = fetchBaseColorByMapPos(mapdata, topMapPos)
+        bottomColor = fetchBaseColorByMapPos(mapdata, bottomMapPos)
+        
+        cx,cy = calcMinMapCenter(mappos)
+        offset = (2*MINMAP_EXPAND+1)*(2*MINMAP_POS_EXPAND+1)/2
+        for px in xrange(cx-offset, cx+offset+1):
+            for ppy in xrange(1, MINMAP_POS_OFFSET+1):
+                py = cy+offset+ppy
+                drawHelp(draw, (px,py), drawColorMix([(topColor, 1.0/(2*MINMAP_POS_OFFSET - ppy+1)),(ownColor, 1.0/ppy)]))
+        for px in xrange(cx-offset, cx+offset+1):
+            for ppy in xrange(1, MINMAP_POS_OFFSET+1):
+                py = cy-offset-ppy
+                drawHelp(draw, (px,py), drawColorMix([(bottomColor, 1.0/(2*MINMAP_POS_OFFSET - ppy+1)),(ownColor, 1.0/ppy)]))
+        for px in xrange(cx-offset, cx+offset+1):
+            for ppy in xrange(1, MINMAP_POS_OFFSET+1):
+                py = cy+offset+ppy
+                drawHelp(draw, (px,py), drawColorMix([(topColor, 1.0/(2*MINMAP_POS_OFFSET - ppy+1)),(ownColor, 1.0/ppy)]))
+        for px in xrange(cx-offset, cx+offset+1):
+            for ppy in xrange(1, MINMAP_POS_OFFSET+1):
+                py = cy-offset-ppy
+                drawHelp(draw, (px,py), drawColorMix([(bottomColor, 1.0/(2*MINMAP_POS_OFFSET - ppy+1)),(ownColor, 1.0/ppy)]))
 
 
 
 def drawBigMap(mapdata, tt):
     '''画背景色，根据主属性'''
+    global ImageHeight
     imageWidth = (BIGMAP_X_EXPAND*2 +1)*(MINMAP_POS_OFFSET*2+(MINMAP_POS_EXPAND*2+1)*(1+2*MINMAP_EXPAND))
-    imageHeight =  (BIGMAP_Y_EXPAND*2 +1)*(MINMAP_POS_OFFSET*2+(MINMAP_POS_EXPAND*2+1)*(1+2*MINMAP_EXPAND))
-    print "image width/height=", imageWidth, imageHeight
-    img = Image.new("RGBA", (imageWidth,imageHeight), color=(0,0,0,256))
+    ImageHeight =  (BIGMAP_Y_EXPAND*2 +1)*(MINMAP_POS_OFFSET*2+(MINMAP_POS_EXPAND*2+1)*(1+2*MINMAP_EXPAND))
+    print "image width/height=", imageWidth, ImageHeight
+    img = Image.new("RGBA", (imageWidth,ImageHeight), color=BlockedBaseColor)
     draw = ImageDraw.Draw(img)
     '''根据主属性绘制底色'''
     drawBaseColor(mapdata, draw)
     '''画MinMap之间的间隙'''
-    drawLeakBetweenMinmaps(mapdata, draw)
+    #drawLeakBetweenMinmaps(mapdata, draw)
     img.save("bigmap%d.png"%(tt), 'PNG')
 
 def dumpMapData(mapdata, tt):
