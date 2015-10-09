@@ -58,6 +58,7 @@ AgentFillColor[AT_3RD_STONE]     = (102, 102, 102, 255) #石头 深灰色
 AgentFillColor[AT_3RD_TREE]      = (000, 102, 000, 255) #树 深绿色
 AgentFillColor[AT_3RD_VOLCANO]   = (102, 000, 000, 255) #火山 红褐色
 AgentFillColor[AT_3RD_WATER]     = (000, 051, 153, 255) #水 深蓝色
+AgentFillColor[AT_FRIEND_CORE]   = (000, 255, 000, 255) #核心 绿色
 
 # 各属性导致的地板底色
 ElementBaseColor = {}
@@ -106,6 +107,7 @@ Continues[AT_ENEMY_NEST]  = 0.0
 DEFAULT_ACTION_PERIOD = 10;
 WATER_ACTION_PERIOD = 10;
 VOLCONO_ACTION_PERIOD = 10;
+CORE_ACTION_PERIOD = 10;
 
 WATER_CURE_LENGTH_RADIO = 1.0/5;
 WATER_CURE_LENGTH_RADIO = 1.0/10;
@@ -308,6 +310,12 @@ def genAgent(minmap, agentpos, agentType, mapposLength):
         agent["nest_attack_distance_near"] = 1
         agent["nest_attack_distance_far"] = (NEST_ATTACK_DISTANCE_BASE + NEST_ATTACK_DISTANCE_LENGTH_RADIO * mapposLength) * calcRandomScope(NestAttackDistanceRadioScope)
         agent["nest_attack_period"] = DEFAULT_ENEMY_ACTION_PERIOD * calcRandomScope(DefaultEnemyActionPeriodScope)
+    elif agentType == AT_FRIEND_CORE:
+        agent["blood"] = 10
+        agent["actionDistance"] = 4
+        agent["attack"] = 1
+        agent["action_period"] = CORE_ACTION_PERIOD
+        agent["action_period_index"] = CORE_ACTION_PERIOD
     else:
         print "ERROR invalid type=", agentType
 
@@ -323,6 +331,10 @@ def putAgentIn(minmap, mapposLength, agentType):
 
     #print "putAgentIn agentType=", agentType, "continues=", continues, "agentPos=", agentpos
 
+    minmap["agents"][encodeAgentPos(agentpos)] = genAgent(minmap, agentpos, agentType, mapposLength)
+    minmap["agents_index"][agentType].append(agentpos)
+
+def putAgentDirect(minmap, agentpos, agentType, mapposLength):
     minmap["agents"][encodeAgentPos(agentpos)] = genAgent(minmap, agentpos, agentType, mapposLength)
     minmap["agents_index"][agentType].append(agentpos)
 
@@ -373,12 +385,44 @@ def genMinMap(mappos):
 
     return minmap
 
+def genMinMapCore(mappos):
+    #print "genMinMap", mappos
+    minmap = {}
+    global CNT_BLOCKED
+    global CNT_NON_BLOCKED
+
+    minmap["pos"] = mappos
+    CNT_NON_BLOCKED += 1
+    minmap["blocked"] = 0
+
+    minmap["state"] = 1 #active
+
+    minmap["main_element_type"] = random.randint(0, 4)
+    minmap["secondary_element_type"] = random.randint(0, 4)
+
+    # 实际以AgentPos作为索引的，agents字典
+    minmap['agents'] = {}
+
+    # 各类agent的索引
+    minmap["agents_index"] = []
+    for at in xrange(AT_MAX):
+        minmap["agents_index"].append([])
+
+    mapposLength = abs(mappos["x"]) + abs(mappos["y"])
+
+    putAgentDirect(minmap, wrapPos(0, 0), AT_FRIEND_CORE, 0)
+
+    return minmap
+
 def genMapData():
     mapdata = {}
     mapdata["minmaps"] = {}
     for x in xrange(-BIGMAP_X_EXPAND, BIGMAP_X_EXPAND+1):
         for y in xrange(-BIGMAP_Y_EXPAND, BIGMAP_Y_EXPAND+1):
-            mapdata["minmaps"][encodeMapPos(wrapPos(x,y))] = genMinMap(wrapPos(x,y))
+            if x == 0 and y == 0:
+                mapdata["minmaps"][encodeMapPos(wrapPos(x,y))] = genMinMapCore(wrapPos(x,y))
+            else:
+                mapdata["minmaps"][encodeMapPos(wrapPos(x,y))] = genMinMap(wrapPos(x,y))
 
     mapdata["agent_id_index"] = AGENT_ID_INDEX #当前消耗到的AgentId 的MAX
     return mapdata
