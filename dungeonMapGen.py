@@ -385,9 +385,32 @@ def drawBaseColor(mapdata, draw):
             for py in xrange(cy-offset, cy+offset+1):
                 draw.point((px, py), fill=baseColor)
 
+def drawColorMix(colorRadioCouples):
+    radioAll = 0.0
+    for couple in colorRadioCouples:
+        color, radio = couple
+        radioAll += radio
+    r = 0.0
+    g = 0.0
+    b = 0.0
+    a = 0.0
+    for couple in colorRadioCouples:
+        color, radio = couple
+        r += radio/radioAll * color[0]
+        g += radio/radioAll * color[1]
+        b += radio/radioAll * color[2]
+        a += radio/radioAll * color[3]
+    
+    return (r,g,b,a)
+
+def drawLeakBetweenMinmaps(mapdata, draw):
+    '''填充minmap之间的offset间隙，过度色'''
+    
+
 
 
 def drawBigMap(mapdata, tt):
+    '''画背景色，根据主属性'''
     imageWidth = (BIGMAP_X_EXPAND*2 +1)*(MINMAP_POS_OFFSET*2+(MINMAP_POS_EXPAND*2+1)*(1+2*MINMAP_EXPAND))
     imageHeight =  (BIGMAP_Y_EXPAND*2 +1)*(MINMAP_POS_OFFSET*2+(MINMAP_POS_EXPAND*2+1)*(1+2*MINMAP_EXPAND))
     print "image width/height=", imageWidth, imageHeight
@@ -395,6 +418,8 @@ def drawBigMap(mapdata, tt):
     draw = ImageDraw.Draw(img)
     '''根据主属性绘制底色'''
     drawBaseColor(mapdata, draw)
+    '''画MinMap之间的间隙'''
+    drawLeakBetweenMinmaps(mapdata, draw)
     img.save("bigmap%d.png"%(tt), 'PNG')
 
 def dumpMapData(mapdata, tt):
