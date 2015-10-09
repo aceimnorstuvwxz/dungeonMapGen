@@ -55,7 +55,7 @@ MINMAP_POS_OFFSET = 3 #各minmap之间的间隙
 AgentFillColor = {}
 AgentFillColor[AT_3RD_MINE]      = (000, 102, 255, 255) #矿 浅蓝色
 AgentFillColor[AT_3RD_STONE]     = (102, 102, 102, 255) #石头 深灰色
-AgentFillColor[AT_3RD_TREE]      = (255, 102, 000, 255) #树 深绿色
+AgentFillColor[AT_3RD_TREE]      = (000, 102, 000, 255) #树 深绿色
 AgentFillColor[AT_3RD_VOLCANO]   = (102, 000, 000, 255) #火山 红褐色
 AgentFillColor[AT_3RD_WATER]     = (000, 051, 102, 255) #水 深蓝色
 
@@ -67,7 +67,8 @@ ElementBaseColor[EL_WATER] = (44,49,71,255)
 ElementBaseColor[EL_FIRE]  = (71,50,44,255)
 ElementBaseColor[EL_EARTH] = (69,71,44,255)
 
-BlockedBaseColor = (40,47,31,255)
+BlockedBaseColor = (47,47,47,255)
+ImageWidth = 0
 ImageHeight = 0
 
 # 各元素在不同属性下出现的概率
@@ -400,10 +401,10 @@ def fetchBaseColorByMapPos(mapdata, mappos):
             return BlockedBaseColor
         else:
             seco = ElementBaseColor[minmap["main_element_type"]]
-            return drawColorMix([(seco, 1), (BlockedBaseColor, 5)])
+            return drawColorMix([(seco, 5), (BlockedBaseColor, 5)])
     else:
         return BlockedBaseColor
-    
+
 def drawHelp(draw, position, color):
     '''解决图片的y坐标与地图的y坐标相反的问题'''
     draw.point((position[0], ImageHeight-position[1]), color)
@@ -430,10 +431,10 @@ def drawLeakBetweenMinmaps(mapdata, draw):
         bottomMapPos = wrapPos(mappos["x"], mappos["y"]-1)
         leftMapPos = wrapPos(mappos["x"]-1, mappos["y"])
         rightMapPos = wrapPos(mappos["x"]+1, mappos["y"])
-        
+
         topColor = fetchBaseColorByMapPos(mapdata, topMapPos)
         bottomColor = fetchBaseColorByMapPos(mapdata, bottomMapPos)
-        
+
         cx,cy = calcMinMapCenter(mappos)
         offset = (2*MINMAP_EXPAND+1)*(2*MINMAP_POS_EXPAND+1)/2
         for px in xrange(cx-offset, cx+offset+1):
@@ -453,20 +454,63 @@ def drawLeakBetweenMinmaps(mapdata, draw):
                 py = cy-offset-ppy
                 drawHelp(draw, (px,py), drawColorMix([(bottomColor, 1.0/(2*MINMAP_POS_OFFSET - ppy+1)),(ownColor, 1.0/ppy)]))
 
+def calcAgentCenter(mappos, agentpos):
+    x = (mappos["x"]+BIGMAP_X_EXPAND)*((MINMAP_POS_EXPAND*2+1)*(MINMAP_EXPAND*2+1)+2*MINMAP_POS_OFFSET) + MINMAP_POS_OFFSET + (agentpos["x"]+MINMAP_EXPAND)*(MINMAP_POS_EXPAND*2+1) + MINMAP_POS_EXPAND
+    y = (mappos["y"]+BIGMAP_Y_EXPAND)*((MINMAP_POS_EXPAND*2+1)*(MINMAP_EXPAND*2+1)+2*MINMAP_POS_OFFSET) + MINMAP_POS_OFFSET + (agentpos["y"]+MINMAP_EXPAND)*(MINMAP_POS_EXPAND*2+1) + MINMAP_POS_EXPAND
+    return (x,y)
 
+def encodePixelPos(x, y):
+    return y*10000+x
+
+def drawAgents(mapdata, draw):
+    '''画agents，先实体，再描边'''
+    agentPixelMap = {} #用来帮助描边
+    for encodedMapPos, minmap in mapdata["minmaps"].items():
+        mappos = minmap["pos"]
+        if minmap["blocked"] != 0:
+            continue
+        for encodedAgentPos, agent in minmap["agents"].items():
+            agentpos = agent["pos"]
+            agentType = agent["type"]
+            if agentType == AT_ENEMY_NEST:
+                continue
+            color = AgentFillColor[agentType]
+            cx,cy = calcAgentCenter(mappos, agentpos)
+            for px in xrange(cx-MINMAP_POS_EXPAND, cx+MINMAP_POS_EXPAND+1):
+                for py in xrange(cy-MINMAP_POS_EXPAND, cy+MINMAP_POS_EXPAND+1):
+                    agentPixelMap[encodePixelPos(px,py)] = 1
+                    drawHelp(draw, (px,py), color)
+    for px in xrange(ImageWidth):
+        for py in xrange(ImageHeight):
+            if agentPixelMap.has_key(encodePixelPos(px, py)) == False:
+                ifdraw = False
+                if agentPixelMap.has_key(encodePixelPos(px-1, py-1)) or\
+                   agentPixelMap.has_key(encodePixelPos(px-1, py)) or\
+                   agentPixelMap.has_key(encodePixelPos(px-1, py+1)) or\
+                   agentPixelMap.has_key(encodePixelPos(px, py-1)) or\
+                   agentPixelMap.has_key(encodePixelPos(px, py+1)) or\
+                   agentPixelMap.has_key(encodePixelPos(px+1, py-1)) or\
+                   agentPixelMap.has_key(encodePixelPos(px+1, py)) or\
+                   agentPixelMap.has_key(encodePixelPos(px+1, py+1)):
+                    drawHelp(draw, (px,py), (0,0,0,255))
 
 def drawBigMap(mapdata, tt):
     '''画背景色，根据主属性'''
     global ImageHeight
-    imageWidth = (BIGMAP_X_EXPAND*2 +1)*(MINMAP_POS_OFFSET*2+(MINMAP_POS_EXPAND*2+1)*(1+2*MINMAP_EXPAND))
+    global ImageWidth
+    ImageWidth = (BIGMAP_X_EXPAND*2 +1)*(MINMAP_POS_OFFSET*2+(MINMAP_POS_EXPAND*2+1)*(1+2*MINMAP_EXPAND))
     ImageHeight =  (BIGMAP_Y_EXPAND*2 +1)*(MINMAP_POS_OFFSET*2+(MINMAP_POS_EXPAND*2+1)*(1+2*MINMAP_EXPAND))
-    print "image width/height=", imageWidth, ImageHeight
-    img = Image.new("RGBA", (imageWidth,ImageHeight), color=BlockedBaseColor)
+    print "image width/height=", ImageWidth, ImageHeight
+    img = Image.new("RGBA", (ImageWidth,ImageHeight), color=BlockedBaseColor)
     draw = ImageDraw.Draw(img)
     '''根据主属性绘制底色'''
     drawBaseColor(mapdata, draw)
     '''画MinMap之间的间隙'''
     #drawLeakBetweenMinmaps(mapdata, draw)
+
+    '''画各agent的影射'''
+    '''画各agent'''
+    drawAgents(mapdata, draw)
     img.save("bigmap%d.png"%(tt), 'PNG')
 
 def dumpMapData(mapdata, tt):
