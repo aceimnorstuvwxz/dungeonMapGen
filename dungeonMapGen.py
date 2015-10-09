@@ -13,7 +13,7 @@ import random
 import time
 
 AGENT_ID_INDEX = 0
-RADIO_MINIMAP_LOST = 0.05 #Bigmap内空隙比例。
+RADIO_MINIMAP_LOST = 0.25 #Bigmap内空隙比例。
 CNT_BLOCKED = 0
 CNT_NON_BLOCKED = 0
 
@@ -53,11 +53,11 @@ MINMAP_POS_OFFSET = 3 #各minmap之间的间隙
 
 # 各类型Agent的色彩
 AgentFillColor = {}
-AgentFillColor[AT_3RD_MINE]      = (000, 102, 255, 255) #矿 浅蓝色
+AgentFillColor[AT_3RD_MINE]      = (135, 213, 226, 255) #矿 浅蓝色
 AgentFillColor[AT_3RD_STONE]     = (102, 102, 102, 255) #石头 深灰色
 AgentFillColor[AT_3RD_TREE]      = (000, 102, 000, 255) #树 深绿色
 AgentFillColor[AT_3RD_VOLCANO]   = (102, 000, 000, 255) #火山 红褐色
-AgentFillColor[AT_3RD_WATER]     = (000, 051, 102, 255) #水 深蓝色
+AgentFillColor[AT_3RD_WATER]     = (000, 051, 153, 255) #水 深蓝色
 
 # 各属性导致的地板底色
 ElementBaseColor = {}
@@ -67,7 +67,9 @@ ElementBaseColor[EL_WATER] = (44,49,71,255)
 ElementBaseColor[EL_FIRE]  = (71,50,44,255)
 ElementBaseColor[EL_EARTH] = (69,71,44,255)
 
-BlockedBaseColor = (47,47,47,255)
+BlockedBaseColor = (0,0,0,255)
+NonBlockedBaseColor = (47,47,47,255)
+BgColor = (20,20,20,255)
 ImageWidth = 0
 ImageHeight = 0
 
@@ -167,6 +169,9 @@ def calcElementAgentOccurcy(occradio, elementType):
 def calcRandomScope(minmax):
     return int(minmax[0] + (minmax[1] - minmax[0]) * random.random());
 
+def isAgentPosLegeal(agentpos):
+    return abs(agentpos["x"]) <=5 and abs(agentpos["y"]) <= 5
+
 def isPosEmpty(minmap, agentpos):
     return  minmap["agents"].has_key(encodeAgentPos(agentpos)) == False
 
@@ -180,28 +185,28 @@ def findContinuesAgentPos(minmap, agentType):
     emptyContinuesPoses = []
     for agentPos in minmap["agents_index"][agentType]:
         pos = posAdd(agentPos, -1, 0)
-        if isPosEmpty(minmap, pos):
+        if isAgentPosLegeal(pos) and isPosEmpty(minmap, pos):
             emptyContinuesPoses.append(pos)
         pos = posAdd(agentPos, 1, 0)
-        if isPosEmpty(minmap, pos):
+        if isAgentPosLegeal(pos) and isPosEmpty(minmap, pos):
             emptyContinuesPoses.append(pos)
         pos = posAdd(agentPos, 0, -1)
-        if isPosEmpty(minmap, pos):
+        if isAgentPosLegeal(pos) and isPosEmpty(minmap, pos):
             emptyContinuesPoses.append(pos)
         pos = posAdd(agentPos, 0, 1)
-        if isPosEmpty(minmap, pos):
+        if isAgentPosLegeal(pos) and isPosEmpty(minmap, pos):
             emptyContinuesPoses.append(pos)
         pos = posAdd(agentPos, 1, 1)
-        if isPosEmpty(minmap, pos):
+        if isAgentPosLegeal(pos) and isPosEmpty(minmap, pos):
             emptyContinuesPoses.append(pos)
         pos = posAdd(agentPos, -1, 1)
-        if isPosEmpty(minmap, pos):
+        if isAgentPosLegeal(pos) and isPosEmpty(minmap, pos):
             emptyContinuesPoses.append(pos)
         pos = posAdd(agentPos, 1, -1)
-        if isPosEmpty(minmap, pos):
+        if isAgentPosLegeal(pos) and isPosEmpty(minmap, pos):
             emptyContinuesPoses.append(pos)
         pos = posAdd(agentPos, -1, -1)
-        if isPosEmpty(minmap, pos):
+        if isAgentPosLegeal(pos) and isPosEmpty(minmap, pos):
             emptyContinuesPoses.append(pos)
 
     if len(emptyContinuesPoses) > 0:
@@ -401,7 +406,7 @@ def fetchBaseColorByMapPos(mapdata, mappos):
             return BlockedBaseColor
         else:
             seco = ElementBaseColor[minmap["main_element_type"]]
-            return drawColorMix([(seco, 5), (BlockedBaseColor, 5)])
+            return drawColorMix([(seco, 5), (NonBlockedBaseColor, 5)])
     else:
         return BlockedBaseColor
 
@@ -455,6 +460,7 @@ def drawLeakBetweenMinmaps(mapdata, draw):
                 drawHelp(draw, (px,py), drawColorMix([(bottomColor, 1.0/(2*MINMAP_POS_OFFSET - ppy+1)),(ownColor, 1.0/ppy)]))
 
 def calcAgentCenter(mappos, agentpos):
+    print agentpos
     x = (mappos["x"]+BIGMAP_X_EXPAND)*((MINMAP_POS_EXPAND*2+1)*(MINMAP_EXPAND*2+1)+2*MINMAP_POS_OFFSET) + MINMAP_POS_OFFSET + (agentpos["x"]+MINMAP_EXPAND)*(MINMAP_POS_EXPAND*2+1) + MINMAP_POS_EXPAND
     y = (mappos["y"]+BIGMAP_Y_EXPAND)*((MINMAP_POS_EXPAND*2+1)*(MINMAP_EXPAND*2+1)+2*MINMAP_POS_OFFSET) + MINMAP_POS_OFFSET + (agentpos["y"]+MINMAP_EXPAND)*(MINMAP_POS_EXPAND*2+1) + MINMAP_POS_EXPAND
     return (x,y)
@@ -501,7 +507,7 @@ def drawBigMap(mapdata, tt):
     ImageWidth = (BIGMAP_X_EXPAND*2 +1)*(MINMAP_POS_OFFSET*2+(MINMAP_POS_EXPAND*2+1)*(1+2*MINMAP_EXPAND))
     ImageHeight =  (BIGMAP_Y_EXPAND*2 +1)*(MINMAP_POS_OFFSET*2+(MINMAP_POS_EXPAND*2+1)*(1+2*MINMAP_EXPAND))
     print "image width/height=", ImageWidth, ImageHeight
-    img = Image.new("RGBA", (ImageWidth,ImageHeight), color=BlockedBaseColor)
+    img = Image.new("RGBA", (ImageWidth,ImageHeight), color=BgColor)
     draw = ImageDraw.Draw(img)
     '''根据主属性绘制底色'''
     drawBaseColor(mapdata, draw)
