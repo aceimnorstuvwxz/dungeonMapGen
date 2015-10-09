@@ -48,6 +48,24 @@ BIGMAP_X_EXPAND = 15 #X方向一共31格
 BIGMAP_Y_EXPAND = 5  #Y方向一共11格
 
 MINMAP_EXPAND = 5 # 11*11
+MINMAP_POS_EXPAND = 2 #每个agentPos绘制5*5像素面积
+MINMAP_POS_OFFSET = 3 #各minmap之间的间隙
+
+# 各类型Agent的色彩
+AgentFillColor = {}
+AgentFillColor[AT_3RD_MINE]      = (000, 102, 255, 255) #矿 浅蓝色
+AgentFillColor[AT_3RD_STONE]     = (102, 102, 102, 255) #石头 深灰色
+AgentFillColor[AT_3RD_TREE]      = (255, 102, 000, 255) #树 深绿色
+AgentFillColor[AT_3RD_VOLCANO]   = (102, 000, 000, 255) #火山 红褐色
+AgentFillColor[AT_3RD_WATER]     = (000, 051, 102, 255) #水 深蓝色
+
+# 各属性导致的地板底色
+ElementBaseColor = {}
+ElementBaseColor[EL_METAL] = (53,53,53,255)
+ElementBaseColor[EL_WOOD]  = (35,57,35,255)
+ElementBaseColor[EL_WATER] = (44,49,71,255)
+ElementBaseColor[EL_FIRE]  = (71,50,44,255)
+ElementBaseColor[EL_EARTH] = (69,71,44,255)
 
 # 各元素在不同属性下出现的概率
 OccurcyRadio = {}
@@ -151,13 +169,11 @@ def isPosEmpty(minmap, agentpos):
 def findRandomEmptyAgentPos(minmap):
     while (True):
         pos = wrapPos(random.randint(-MINMAP_EXPAND, MINMAP_EXPAND), random.randint(-MINMAP_EXPAND, MINMAP_EXPAND))
-        print "findRandomEmptyAgentPos", pos
         if isPosEmpty(minmap, pos):
             return pos;
     
 def findContinuesAgentPos(minmap, agentType):
     emptyContinuesPoses = []
-    print agentType
     for agentPos in minmap["agents_index"][agentType]:
         pos = posAdd(agentPos, -1, 0)
         if isPosEmpty(minmap, pos):
@@ -288,21 +304,20 @@ def putAgentIn(minmap, mapposLength, agentType):
     else:
         agentpos = findRandomEmptyAgentPos(minmap);
     
-    print "putAgentIn agentType=", agentType, "continues=", continues, "agentPos=", agentpos
+    #print "putAgentIn agentType=", agentType, "continues=", continues, "agentPos=", agentpos
 
     minmap["agents"][encodeAgentPos(agentpos)] = genAgent(minmap, agentpos, agentType, mapposLength)
     minmap["agents_index"][agentType].append(agentpos)
 
 def genAgentsOfType(minmap, agentType, mapposLength):
-    print "genAgentsOfType", agentType, "mapposLength", mapposLength
+    #print "genAgentsOfType", agentType, "mapposLength", mapposLength
     if calcElementAgentOccurcy(OccurcyRadio[agentType], minmap["main_element_type"]):
         num = calcRandomScope(NumScope[agentType])
-        print "num", num
         for i in xrange(num):
             putAgentIn(minmap, mapposLength, agentType)
 
 def genMinMap(mappos):
-    print "genMinMap", mappos
+    #print "genMinMap", mappos
     minmap = {}
     global CNT_BLOCKED
     global CNT_NON_BLOCKED
@@ -343,27 +358,53 @@ def genMinMap(mappos):
 
 def genMapData():
     mapdata = {}
+    mapdata["minmaps"] = {}
     for x in xrange(-BIGMAP_X_EXPAND, BIGMAP_X_EXPAND+1):
         for y in xrange(-BIGMAP_Y_EXPAND, BIGMAP_Y_EXPAND+1):
-            mapdata[encodeMapPos(wrapPos(x,y))] = genMinMap(wrapPos(x,y))
+            mapdata["minmaps"][encodeMapPos(wrapPos(x,y))] = genMinMap(wrapPos(x,y))
             
     mapdata["agent_id_index"] = AGENT_ID_INDEX #当前消耗到的AgentId 的MAX
     return mapdata
 
-def drawBigMap(mapdata):
-    pass
+def calcMinMapCenter(mappos):
+    minmapLength = (MINMAP_POS_OFFSET + MINMAP_POS_EXPAND)*2 + 1; 
+    x = (mappos["x"] + BIGMAP_X_EXPAND) * minmapLength + MINMAP_POS_EXPAND + MINMAP_POS_OFFSET
+    y = (mappos["y"] + BIGMAP_Y_EXPAND) * minmapLength + MINMAP_POS_EXPAND + MINMAP_POS_OFFSET
+    return x,y
 
-def dumpMapData(mapdata):
+def drawBaseColor(mapdata, draw):
+    for encodedMapPos, minmap in mapdata["minmaps"]:
+        mappos = minmap["pos"]
+        baseColor = ElementBaseColor[minmap["main_element_type"]]
+        cx,cy = calcMinMapCenter(mappos)
+        for px in xrange(cx-MINMAP_POS_EXPAND, cx+MINMAP_POS_EXPAND):
+            for py in xrange(cy-MINMAP_POS_EXPAND, cy+MINMAP_POS_EXPAND):
+                draw.point((px, py), fill=baseColor)
+        
+        
+
+def drawBigMap(mapdata, tt):
+    imageWidth = (BIGMAP_X_EXPAND*2 +1)*(MINMAP_POS_OFFSET*2+(MINMAP_POS_EXPAND*2+1)*(1+2*MINMAP_EXPAND))
+    imageHeight =  (BIGMAP_Y_EXPAND*2 +1)*(MINMAP_POS_OFFSET*2+(MINMAP_POS_EXPAND*2+1)*(1+2*MINMAP_EXPAND))
+    print "image width/height=", imageWidth, imageHeight
+    img = Image.new("RGBA", (imageWidth,imageHeight), color=(0,0,0,256))
+    draw = ImageDraw.Draw(img)
+    '''根据主属性绘制底色'''
+    drawBaseColor(mapdata, draw)
+    img.save("bigmap%d.png"%(tt), 'PNG')
+
+def dumpMapData(mapdata, tt):
     #del minmap["agents_index"] 
-    fn = 'bigmap%d.json'%(time.time())
-    print fn
+    fn = 'bigmap%d.json'%(tt)
+    print "map-data-file-name=", fn
     f = open(fn,'w')
     f.write(json.dumps(mapdata))
     f.close()
 
 if __name__ == "__main__":
     mapdata = genMapData()
-    drawBigMap(mapdata)
-    dumpMapData(mapdata)
-    print AGENT_ID_INDEX,CNT_BLOCKED, CNT_NON_BLOCKED, CNT_BLOCKED * 1.0 / (CNT_BLOCKED + CNT_NON_BLOCKED)
+    tt = time.time()
+    drawBigMap(mapdata, tt)
+    dumpMapData(mapdata, tt)
+    print "agentNum=", AGENT_ID_INDEX, "blockedMinMap=", CNT_BLOCKED, "blockedRadio=", CNT_BLOCKED * 1.0 / (CNT_BLOCKED + CNT_NON_BLOCKED)
     print 'DONE'
