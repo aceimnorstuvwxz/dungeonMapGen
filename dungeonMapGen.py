@@ -171,7 +171,7 @@ def findRandomEmptyAgentPos(minmap):
         pos = wrapPos(random.randint(-MINMAP_EXPAND, MINMAP_EXPAND), random.randint(-MINMAP_EXPAND, MINMAP_EXPAND))
         if isPosEmpty(minmap, pos):
             return pos;
-    
+
 def findContinuesAgentPos(minmap, agentType):
     emptyContinuesPoses = []
     for agentPos in minmap["agents_index"][agentType]:
@@ -199,7 +199,7 @@ def findContinuesAgentPos(minmap, agentType):
         pos = posAdd(agentPos, -1, -1)
         if isPosEmpty(minmap, pos):
             emptyContinuesPoses.append(pos)
-    
+
     if len(emptyContinuesPoses) > 0:
         return emptyContinuesPoses[random.randint(0, len(emptyContinuesPoses)-1)]
     else:
@@ -237,7 +237,7 @@ def genEmptyAgent():
     agent["nest_attack_distance_near"] = 1
     agent["nest_attack_distance_far"] = 2
     agent["nest_attack_period"] = DEFAULT_ENEMY_ACTION_PERIOD
-    
+
     return agent
 
 def genAgent(minmap, agentpos, agentType, mapposLength):
@@ -274,26 +274,26 @@ def genAgent(minmap, agentpos, agentType, mapposLength):
             agent["nest_chance_to_near"] = calcRandomScope(NestMostNearAsNearScope)
         else:
             agent["nest_chance_to_near"] = calcRandomScope(NestMostFarAsNearScope)
-        
+
         if rand_0_1() < NestChanceToHasBoss:
             agent["nest_chance_to_boss"] = calcRandomScope(NestBossRadioScope)
         else:
             agent["nest_chance_to_boss"] = 0.0
-            
+
         agent["nest_blood"] = (NEST_BLOOD_BASE + mapposLength * NEST_BLOOD_LENGTH_RADIO) * calcRandomScope(NestBloodRadioScope);
         agent["nest_attack"] = (NEST_ATTACK_BASE + mapposLength * NEST_ATTACK_LENGTH_RADIO) * calcRandomScope(NestAttackRadioScope);
-        
+
         if rand_0_1() < rand_0_1() < NEST_CHANCE_AS_MAIN_ELEMENT_TYPE:
             agent["nest_element_type"] = minmap["main_element_type"]
         else:
             agent["nest_element_type"] = minmap["secondary_element_type"]
-        
+
         agent["nest_attack_distance_near"] = 1
         agent["nest_attack_distance_far"] = (NEST_ATTACK_DISTANCE_BASE + NEST_ATTACK_DISTANCE_LENGTH_RADIO * mapposLength) * calcRandomScope(NestAttackDistanceRadioScope)
         agent["nest_attack_period"] = DEFAULT_ENEMY_ACTION_PERIOD * calcRandomScope(DefaultEnemyActionPeriodScope)
     else:
-        print "ERROR invalid type=", agentType    
-    
+        print "ERROR invalid type=", agentType
+
     return agent
 
 def putAgentIn(minmap, mapposLength, agentType):
@@ -303,7 +303,7 @@ def putAgentIn(minmap, mapposLength, agentType):
         agentpos = findContinuesAgentPos(minmap, agentType)
     else:
         agentpos = findRandomEmptyAgentPos(minmap);
-    
+
     #print "putAgentIn agentType=", agentType, "continues=", continues, "agentPos=", agentpos
 
     minmap["agents"][encodeAgentPos(agentpos)] = genAgent(minmap, agentpos, agentType, mapposLength)
@@ -321,7 +321,7 @@ def genMinMap(mappos):
     minmap = {}
     global CNT_BLOCKED
     global CNT_NON_BLOCKED
-    
+
     #部分MinMap是空隙，不能进入。
     if rand_0_1() < RADIO_MINIMAP_LOST:
         minmap["blocked"] = 1
@@ -330,16 +330,16 @@ def genMinMap(mappos):
     else:
         CNT_NON_BLOCKED += 1
         minmap["blocked"] = 0
-    
+
     minmap["pos"] = mappos
     minmap["state"] = 0 #non-active
-    
+
     minmap["main_element_type"] = random.randint(0, 4)
     minmap["secondary_element_type"] = random.randint(0, 4)
-    
+
     # 实际以AgentPos作为索引的，agents字典
     minmap['agents'] = {}
-    
+
     # 各类agent的索引
     minmap["agents_index"] = []
     for at in xrange(AT_MAX):
@@ -362,26 +362,30 @@ def genMapData():
     for x in xrange(-BIGMAP_X_EXPAND, BIGMAP_X_EXPAND+1):
         for y in xrange(-BIGMAP_Y_EXPAND, BIGMAP_Y_EXPAND+1):
             mapdata["minmaps"][encodeMapPos(wrapPos(x,y))] = genMinMap(wrapPos(x,y))
-            
+
     mapdata["agent_id_index"] = AGENT_ID_INDEX #当前消耗到的AgentId 的MAX
     return mapdata
 
 def calcMinMapCenter(mappos):
-    minmapLength = (MINMAP_POS_OFFSET + MINMAP_POS_EXPAND)*2 + 1; 
-    x = (mappos["x"] + BIGMAP_X_EXPAND) * minmapLength + MINMAP_POS_EXPAND + MINMAP_POS_OFFSET
-    y = (mappos["y"] + BIGMAP_Y_EXPAND) * minmapLength + MINMAP_POS_EXPAND + MINMAP_POS_OFFSET
+    minmapLength = (MINMAP_POS_OFFSET*2 + (MINMAP_EXPAND*2+1)*(MINMAP_POS_EXPAND*2+1));
+    x = (mappos["x"] + BIGMAP_X_EXPAND) * minmapLength + MINMAP_EXPAND*(MINMAP_POS_EXPAND*2+1) + MINMAP_POS_OFFSET + MINMAP_POS_EXPAND
+    y = (mappos["y"] + BIGMAP_Y_EXPAND) * minmapLength + MINMAP_EXPAND*(MINMAP_POS_EXPAND*2+1) + MINMAP_POS_OFFSET + MINMAP_POS_EXPAND
     return x,y
 
 def drawBaseColor(mapdata, draw):
-    for encodedMapPos, minmap in mapdata["minmaps"]:
+    for encodedMapPos, minmap in mapdata["minmaps"].items():
+        if minmap["blocked"] != 0:
+            continue
         mappos = minmap["pos"]
         baseColor = ElementBaseColor[minmap["main_element_type"]]
         cx,cy = calcMinMapCenter(mappos)
-        for px in xrange(cx-MINMAP_POS_EXPAND, cx+MINMAP_POS_EXPAND):
-            for py in xrange(cy-MINMAP_POS_EXPAND, cy+MINMAP_POS_EXPAND):
+        print cx,cy
+        offset = (MINMAP_EXPAND*2+1)*(MINMAP_POS_EXPAND*2+1)/2
+        for px in xrange(cx-offset, cx+offset+1):
+            for py in xrange(cy-offset, cy+offset+1):
                 draw.point((px, py), fill=baseColor)
-        
-        
+
+
 
 def drawBigMap(mapdata, tt):
     imageWidth = (BIGMAP_X_EXPAND*2 +1)*(MINMAP_POS_OFFSET*2+(MINMAP_POS_EXPAND*2+1)*(1+2*MINMAP_EXPAND))
@@ -394,7 +398,7 @@ def drawBigMap(mapdata, tt):
     img.save("bigmap%d.png"%(tt), 'PNG')
 
 def dumpMapData(mapdata, tt):
-    #del minmap["agents_index"] 
+    #del minmap["agents_index"]
     fn = 'bigmap%d.json'%(tt)
     print "map-data-file-name=", fn
     f = open(fn,'w')
