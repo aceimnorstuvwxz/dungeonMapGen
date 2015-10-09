@@ -170,7 +170,15 @@ def calcRandomScope(minmax):
     return int(minmax[0] + (minmax[1] - minmax[0]) * random.random());
 
 def isAgentPosLegeal(agentpos):
-    return abs(agentpos["x"]) <=5 and abs(agentpos["y"]) <= 5
+    if abs(agentpos["x"]) <=5 and abs(agentpos["y"]) <= 5:
+        if abs(agentpos["x"]) == MINMAP_EXPAND and agentpos["y"] == 0:
+            return False
+        if abs(agentpos["y"]) == MINMAP_EXPAND and agentpos["x"] == 0:
+            return False
+        return True
+    else:
+        return False
+    
 
 def isPosEmpty(minmap, agentpos):
     return  minmap["agents"].has_key(encodeAgentPos(agentpos)) == False
@@ -178,7 +186,7 @@ def isPosEmpty(minmap, agentpos):
 def findRandomEmptyAgentPos(minmap):
     while (True):
         pos = wrapPos(random.randint(-MINMAP_EXPAND, MINMAP_EXPAND), random.randint(-MINMAP_EXPAND, MINMAP_EXPAND))
-        if isPosEmpty(minmap, pos):
+        if isPosEmpty(minmap, pos) and isAgentPosLegeal(pos):
             return pos;
 
 def findContinuesAgentPos(minmap, agentType):
