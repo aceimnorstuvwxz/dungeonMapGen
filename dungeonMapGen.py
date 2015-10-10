@@ -183,7 +183,7 @@ def isAgentPosLegeal(agentpos):
     
 
 def isPosEmpty(minmap, agentpos):
-    return  minmap["agents"].has_key(encodeAgentPos(agentpos)) == False
+    return  minmap["agent_positions"].has_key(encodeAgentPos(agentpos)) == False
 
 def findRandomEmptyAgentPos(minmap):
     while (True):
@@ -331,11 +331,13 @@ def putAgentIn(minmap, mapposLength, agentType):
 
     #print "putAgentIn agentType=", agentType, "continues=", continues, "agentPos=", agentpos
 
-    minmap["agents"][encodeAgentPos(agentpos)] = genAgent(minmap, agentpos, agentType, mapposLength)
+    minmap["agents"].append(genAgent(minmap, agentpos, agentType, mapposLength))
+    minmap["agent_positions"][encodeAgentPos(agentpos)] = 1
     minmap["agents_index"][agentType].append(agentpos)
 
 def putAgentDirect(minmap, agentpos, agentType, mapposLength):
-    minmap["agents"][encodeAgentPos(agentpos)] = genAgent(minmap, agentpos, agentType, mapposLength)
+    minmap["agents"].append(genAgent(minmap, agentpos, agentType, mapposLength))
+    minmap["agent_positions"][encodeAgentPos(agentpos)] = 1
     minmap["agents_index"][agentType].append(agentpos)
 
 def genAgentsOfType(minmap, agentType, mapposLength):
@@ -367,7 +369,8 @@ def genMinMap(mappos):
     minmap["secondary_element_type"] = random.randint(0, 4)
 
     # 实际以AgentPos作为索引的，agents字典
-    minmap['agents'] = {}
+    minmap['agents'] = []
+    minmap['agent_positions'] = {}
 
     # 各类agent的索引
     minmap["agents_index"] = []
@@ -401,7 +404,9 @@ def genMinMapCore(mappos):
     minmap["secondary_element_type"] = random.randint(0, 4)
 
     # 实际以AgentPos作为索引的，agents字典
-    minmap['agents'] = {}
+    minmap['agents'] = []
+    minmap['agent_positions'] = {}
+
 
     # 各类agent的索引
     minmap["agents_index"] = []
@@ -527,7 +532,7 @@ def drawAgents(mapdata, draw):
         mappos = minmap["pos"]
         if minmap["blocked"] != 0:
             continue
-        for encodedAgentPos, agent in minmap["agents"].items():
+        for agent in minmap["agents"]:
             agentpos = agent["pos"]
             agentType = agent["type"]
             if agentType == AT_ENEMY_NEST:
