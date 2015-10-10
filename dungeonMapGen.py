@@ -168,8 +168,12 @@ def calcElementAgentOccurcy(occradio, elementType):
     radio = occradio[elementType];
     return random.random() < radio;
 
-def calcRandomScope(minmax):
+def calcRandomScopeInt(minmax):
     return int(minmax[0] + (minmax[1] - minmax[0]) * random.random());
+
+def calcRandomScopeFloat(minmax):
+    return minmax[0] + (minmax[1] - minmax[0]) * random.random();
+
 
 def isAgentPosLegeal(agentpos):
     if abs(agentpos["x"]) <=5 and abs(agentpos["y"]) <= 5:
@@ -180,7 +184,7 @@ def isAgentPosLegeal(agentpos):
         return True
     else:
         return False
-    
+
 
 def isPosEmpty(minmap, agentpos):
     return  minmap["agent_positions"].has_key(encodeAgentPos(agentpos)) == False
@@ -281,26 +285,26 @@ def genAgent(minmap, agentpos, agentType, mapposLength):
         agent["action_period"] = VOLCONO_ACTION_PERIOD
         agent["action_period_index"] = VOLCONO_ACTION_PERIOD
     elif agentType == AT_3RD_MINE:
-        agent["mine_capacity"] = (MINE_BASE_CAPACITY + MINE_CAPACITY_LENGTH_RADIO * mapposLength) * calcRandomScope(MineCapacityRadio)
+        agent["mine_capacity"] = int((MINE_BASE_CAPACITY + MINE_CAPACITY_LENGTH_RADIO * mapposLength) * calcRandomScopeFloat(MineCapacityRadio))
         agent["mine_amount"] = agent["mine_capacity"]
     elif agentType == AT_ENEMY_NEST:
-        agent["action_period"] = calcRandomScope(PeriodScopeNestAction)
+        agent["action_period"] = calcRandomScopeInt(PeriodScopeNestAction)
         agent["action_index"] = agent["action_period"]
-        agent["chance_to_relax"] = calcRandomScope(NestChanceToRelaxScope)
-        agent["action_relax_period"] = calcRandomScope(NestRelaxPeriodScope)
+        agent["chance_to_relax"] = calcRandomScopeInt(NestChanceToRelaxScope)
+        agent["action_relax_period"] = calcRandomScopeInt(NestRelaxPeriodScope)
         agent["action_relax_index"] = 0
         if rand_0_1() < NestChanceToBeNear:
-            agent["nest_chance_to_near"] = calcRandomScope(NestMostNearAsNearScope)
+            agent["nest_chance_to_near"] = calcRandomScopeFloat(NestMostNearAsNearScope)
         else:
-            agent["nest_chance_to_near"] = calcRandomScope(NestMostFarAsNearScope)
+            agent["nest_chance_to_near"] = calcRandomScopeFloat(NestMostFarAsNearScope)
 
         if rand_0_1() < NestChanceToHasBoss:
-            agent["nest_chance_to_boss"] = calcRandomScope(NestBossRadioScope)
+            agent["nest_chance_to_boss"] = calcRandomScopeFloat(NestBossRadioScope)
         else:
             agent["nest_chance_to_boss"] = 0.0
 
-        agent["nest_blood"] = (NEST_BLOOD_BASE + mapposLength * NEST_BLOOD_LENGTH_RADIO) * calcRandomScope(NestBloodRadioScope);
-        agent["nest_attack"] = (NEST_ATTACK_BASE + mapposLength * NEST_ATTACK_LENGTH_RADIO) * calcRandomScope(NestAttackRadioScope);
+        agent["nest_blood"] = int((NEST_BLOOD_BASE + mapposLength * NEST_BLOOD_LENGTH_RADIO) * calcRandomScopeFloat(NestBloodRadioScope))
+        agent["nest_attack"] = int((NEST_ATTACK_BASE + mapposLength * NEST_ATTACK_LENGTH_RADIO) * calcRandomScopeFloat(NestAttackRadioScope))
 
         if rand_0_1() < rand_0_1() < NEST_CHANCE_AS_MAIN_ELEMENT_TYPE:
             agent["nest_element_type"] = minmap["main_element_type"]
@@ -308,8 +312,8 @@ def genAgent(minmap, agentpos, agentType, mapposLength):
             agent["nest_element_type"] = minmap["secondary_element_type"]
 
         agent["nest_attack_distance_near"] = 1
-        agent["nest_attack_distance_far"] = (NEST_ATTACK_DISTANCE_BASE + NEST_ATTACK_DISTANCE_LENGTH_RADIO * mapposLength) * calcRandomScope(NestAttackDistanceRadioScope)
-        agent["nest_attack_period"] = DEFAULT_ENEMY_ACTION_PERIOD * calcRandomScope(DefaultEnemyActionPeriodScope)
+        agent["nest_attack_distance_far"] = int((NEST_ATTACK_DISTANCE_BASE + NEST_ATTACK_DISTANCE_LENGTH_RADIO * mapposLength) * calcRandomScopeFloat(NestAttackDistanceRadioScope))
+        agent["nest_attack_period"] = int(DEFAULT_ENEMY_ACTION_PERIOD * calcRandomScopeFloat(DefaultEnemyActionPeriodScope))
     elif agentType == AT_FRIEND_CORE:
         agent["blood"] = 10
         agent["actionDistance"] = 4
@@ -343,7 +347,7 @@ def putAgentDirect(minmap, agentpos, agentType, mapposLength):
 def genAgentsOfType(minmap, agentType, mapposLength):
     #print "genAgentsOfType", agentType, "mapposLength", mapposLength
     if calcElementAgentOccurcy(OccurcyRadio[agentType], minmap["main_element_type"]):
-        num = calcRandomScope(NumScope[agentType])
+        num = calcRandomScopeInt(NumScope[agentType])
         for i in xrange(num):
             putAgentIn(minmap, mapposLength, agentType)
 
@@ -421,13 +425,13 @@ def genMinMapCore(mappos):
 
 def genMapData():
     mapdata = {}
-    mapdata["minmaps"] = {}
+    mapdata["minmaps"] = []
     for x in xrange(-BIGMAP_X_EXPAND, BIGMAP_X_EXPAND+1):
         for y in xrange(-BIGMAP_Y_EXPAND, BIGMAP_Y_EXPAND+1):
             if x == 0 and y == 0:
-                mapdata["minmaps"][encodeMapPos(wrapPos(x,y))] = genMinMapCore(wrapPos(x,y))
+                mapdata["minmaps"].append(genMinMapCore(wrapPos(x,y)))
             else:
-                mapdata["minmaps"][encodeMapPos(wrapPos(x,y))] = genMinMap(wrapPos(x,y))
+                mapdata["minmaps"].append(genMinMap(wrapPos(x,y)))
 
     mapdata["agent_id_index"] = AGENT_ID_INDEX #当前消耗到的AgentId 的MAX
     mapdata["minmap_unblocked_count"] = CNT_NON_BLOCKED
@@ -457,25 +461,21 @@ def drawColorMix(colorRadioCouples):
 
     return (int(r),int(g),int(b),int(a))
 
-def fetchBaseColorByMapPos(mapdata, mappos):
-    if mapdata["minmaps"].has_key(encodeMapPos(mappos)):
-        minmap = mapdata["minmaps"][encodeMapPos(mappos)]
-        if minmap["blocked"] != 0:
-            return BlockedBaseColor
-        else:
-            seco = ElementBaseColor[minmap["main_element_type"]]
-            return drawColorMix([(seco, 5), (NonBlockedBaseColor, 5)])
-    else:
+def fetchBaseColorByMapPos(minmap):
+    if minmap["blocked"] != 0:
         return BlockedBaseColor
+    else:
+        seco = ElementBaseColor[minmap["main_element_type"]]
+        return drawColorMix([(seco, 5), (NonBlockedBaseColor, 5)])
 
 def drawHelp(draw, position, color):
     '''解决图片的y坐标与地图的y坐标相反的问题'''
     draw.point((position[0], ImageHeight-position[1]), color)
 
 def drawBaseColor(mapdata, draw):
-    for encodedMapPos, minmap in mapdata["minmaps"].items():
+    for minmap in mapdata["minmaps"]:
         mappos = minmap["pos"]
-        baseColor = fetchBaseColorByMapPos(mapdata, mappos)
+        baseColor = fetchBaseColorByMapPos(minmap)
         cx,cy = calcMinMapCenter(mappos)
         print cx,cy
         offset = (MINMAP_EXPAND*2+1)*(MINMAP_POS_EXPAND*2+1)/2
@@ -484,9 +484,8 @@ def drawBaseColor(mapdata, draw):
                 drawHelp(draw, (px, py), baseColor)
 
 
-
+'''
 def drawLeakBetweenMinmaps(mapdata, draw):
-    '''填充minmap之间的offset间隙，过度色'''
     for encodedMapPos, minmap in mapdata["minmaps"].items():
         mappos = minmap["pos"]
         ownColor = fetchBaseColorByMapPos(mapdata, mappos)
@@ -516,7 +515,7 @@ def drawLeakBetweenMinmaps(mapdata, draw):
             for ppy in xrange(1, MINMAP_POS_OFFSET+1):
                 py = cy-offset-ppy
                 drawHelp(draw, (px,py), drawColorMix([(bottomColor, 1.0/(2*MINMAP_POS_OFFSET - ppy+1)),(ownColor, 1.0/ppy)]))
-
+'''
 def calcAgentCenter(mappos, agentpos):
     print agentpos
     x = (mappos["x"]+BIGMAP_X_EXPAND)*((MINMAP_POS_EXPAND*2+1)*(MINMAP_EXPAND*2+1)+2*MINMAP_POS_OFFSET) + MINMAP_POS_OFFSET + (agentpos["x"]+MINMAP_EXPAND)*(MINMAP_POS_EXPAND*2+1) + MINMAP_POS_EXPAND
@@ -529,7 +528,7 @@ def encodePixelPos(x, y):
 def drawAgents(mapdata, draw):
     '''画agents，先实体，再描边'''
     agentPixelMap = {} #用来帮助描边
-    for encodedMapPos, minmap in mapdata["minmaps"].items():
+    for minmap in mapdata["minmaps"]:
         mappos = minmap["pos"]
         if minmap["blocked"] != 0:
             continue
