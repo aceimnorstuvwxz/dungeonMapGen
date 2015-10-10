@@ -430,6 +430,7 @@ def genMapData():
                 mapdata["minmaps"][encodeMapPos(wrapPos(x,y))] = genMinMap(wrapPos(x,y))
 
     mapdata["agent_id_index"] = AGENT_ID_INDEX #当前消耗到的AgentId 的MAX
+    mapdata["minmap_unblocked_count"] = CNT_NON_BLOCKED
     return mapdata
 
 def calcMinMapCenter(mappos):
