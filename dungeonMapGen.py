@@ -11,7 +11,6 @@ from PIL import Image, ImageDraw
 import json
 import random
 import time
-import math
 
 AGENT_ID_INDEX = 0
 RADIO_MINIMAP_LOST = 0.25 #Bigmap内空隙比例。
@@ -52,25 +51,14 @@ MINMAP_EXPAND = 5 # 11*11
 MINMAP_POS_EXPAND = 2 #每个agentPos绘制5*5像素面积
 MINMAP_POS_OFFSET = 3 #各minmap之间的间隙
 
-# 各类型Agent的色彩，现在被用来作为地形的色彩
+# 各类型Agent的色彩
 AgentFillColor = {}
 AgentFillColor[AT_3RD_MINE]      = (135, 213, 226, 255) #矿 浅蓝色
-AgentFillColor[AT_3RD_STONE]     = (0, 0, 0, 255) #石头 深灰色
-AgentFillColor[AT_3RD_TREE]      = (20, 56, 06, 255) #树 深绿色
+AgentFillColor[AT_3RD_STONE]     = (102, 102, 102, 255) #石头 深灰色
+AgentFillColor[AT_3RD_TREE]      = (000, 102, 000, 255) #树 深绿色
 AgentFillColor[AT_3RD_VOLCANO]   = (102, 000, 000, 255) #火山 红褐色
 AgentFillColor[AT_3RD_WATER]     = (000, 051, 153, 255) #水 深蓝色
 AgentFillColor[AT_FRIEND_CORE]   = (000, 255, 000, 255) #核心 绿色
-
-COLOR_STEP_MAX = 10
-Terrain = {}
-#                           距离，radio
-Terrain[AT_3RD_MINE]      = (6, 0.1)
-Terrain[AT_3RD_STONE]     = (6, 0.3)
-Terrain[AT_3RD_TREE]      = (10, 0.1)
-Terrain[AT_3RD_VOLCANO]   = (20, 0.1)
-Terrain[AT_3RD_WATER]     = (15, 0.1)
-Terrain[AT_FRIEND_CORE]   = (20, 0.0)
-
 
 # 各属性导致的地板底色
 ElementBaseColor = {}
@@ -80,10 +68,8 @@ ElementBaseColor[EL_WATER] = (44,49,71,255)
 ElementBaseColor[EL_FIRE]  = (71,50,44,255)
 ElementBaseColor[EL_EARTH] = (69,71,44,255)
 
-BASE_COLOR_RADIO = 3
-ELEMENT_COLOR_RADIO = 5
 BlockedBaseColor = (0,0,0,255)
-NonBlockedBaseColor = (67,67,67,255)
+NonBlockedBaseColor = (47,47,47,255)
 BgColor = (20,20,20,255)
 ImageWidth = 0
 ImageHeight = 0
@@ -480,31 +466,18 @@ def fetchBaseColorByMapPos(minmap):
         return BlockedBaseColor
     else:
         seco = ElementBaseColor[minmap["main_element_type"]]
-        return drawColorMix([(seco, BASE_COLOR_RADIO), (NonBlockedBaseColor, ELEMENT_COLOR_RADIO)])
-
-def slipp(c):
-    return int(c/COLOR_STEP_MAX) * COLOR_STEP_MAX
-
-def splipColor(color):
-    return (slipp(color[0]), slipp(color[1]), slipp(color[2]), color[3])
-
+        return drawColorMix([(seco, 5), (NonBlockedBaseColor, 5)])
 
 def drawHelp(draw, position, color):
     '''解决图片的y坐标与地图的y坐标相反的问题'''
-    draw.point((position[0], ImageHeight-position[1]-1), splipColor(color))
-    
-def getColorHelp(img, position):
-    if position[0]>=0 and position[0] < ImageWidth and position[1] >=0 and position[1] < ImageHeight:
-        #print ImageWidth,ImageHeight, position, (position[0], ImageHeight-position[1]-1)
-        return img.getpixel((position[0], ImageHeight-position[1]-1))
-    return (0,0,0,0)
+    draw.point((position[0], ImageHeight-position[1]), color)
 
 def drawBaseColor(mapdata, draw):
     for minmap in mapdata["minmaps"]:
         mappos = minmap["pos"]
         baseColor = fetchBaseColorByMapPos(minmap)
         cx,cy = calcMinMapCenter(mappos)
-        #print cx,cy
+        print cx,cy
         offset = (MINMAP_EXPAND*2+1)*(MINMAP_POS_EXPAND*2+1)/2
         for px in xrange(cx-offset, cx+offset+1):
             for py in xrange(cy-offset, cy+offset+1):
@@ -544,6 +517,7 @@ def drawLeakBetweenMinmaps(mapdata, draw):
                 drawHelp(draw, (px,py), drawColorMix([(bottomColor, 1.0/(2*MINMAP_POS_OFFSET - ppy+1)),(ownColor, 1.0/ppy)]))
 '''
 def calcAgentCenter(mappos, agentpos):
+    print agentpos
     x = (mappos["x"]+BIGMAP_X_EXPAND)*((MINMAP_POS_EXPAND*2+1)*(MINMAP_EXPAND*2+1)+2*MINMAP_POS_OFFSET) + MINMAP_POS_OFFSET + (agentpos["x"]+MINMAP_EXPAND)*(MINMAP_POS_EXPAND*2+1) + MINMAP_POS_EXPAND
     y = (mappos["y"]+BIGMAP_Y_EXPAND)*((MINMAP_POS_EXPAND*2+1)*(MINMAP_EXPAND*2+1)+2*MINMAP_POS_OFFSET) + MINMAP_POS_OFFSET + (agentpos["y"]+MINMAP_EXPAND)*(MINMAP_POS_EXPAND*2+1) + MINMAP_POS_EXPAND
     return (x,y)
@@ -583,35 +557,6 @@ def drawAgents(mapdata, draw):
                    agentPixelMap.has_key(encodePixelPos(px+1, py+1)):
                     drawHelp(draw, (px,py), (0,0,0,255))
 
-
-def drawTerrainPerAgent(color, length, radio, cx, cy, draw, img):
-    for dx in xrange(-length, length+1):
-        for dy in xrange(-length, length+1):
-            plen = math.sqrt(dx*dx+dy*dy)
-            if  plen <= length:
-                px = cx + dx
-                py = cy + dy
-                pradio = (length - plen)/length * radio
-                oldColor = getColorHelp(img, (px,py))
-                newColor = drawColorMix([(color, pradio),(oldColor, 1.0-pradio)])
-                drawHelp(draw, (px,py), newColor)
-                    
-    
-def drawTerrain(mapdata, draw, img):
-    for minmap in mapdata["minmaps"]:
-        mappos = minmap["pos"]
-        if minmap["blocked"] != 0:
-            continue
-        for agent in minmap["agents"]:
-            agentpos = agent["pos"]
-            agentType = agent["type"]
-            if agentType == AT_ENEMY_NEST:
-                continue
-            color = AgentFillColor[agentType]
-            cx,cy = calcAgentCenter(mappos, agentpos)
-            length, radio = Terrain[agentType]
-            drawTerrainPerAgent(color, length, radio, cx, cy, draw, img)
-
 def drawBigMap(mapdata, tt):
     '''画背景色，根据主属性'''
     global ImageHeight
@@ -626,9 +571,7 @@ def drawBigMap(mapdata, tt):
     '''画MinMap之间的间隙'''
     #drawLeakBetweenMinmaps(mapdata, draw)
 
-    '''画地形'''
-    drawTerrain(mapdata, draw, img)
-    
+    '''画各agent的影射'''
     '''画各agent'''
     #drawAgents(mapdata, draw)
     img.save("bigmap%d.png"%(tt), 'PNG')
